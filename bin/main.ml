@@ -24,17 +24,34 @@ let rec get_active_branch = function
 
 let get_git_prompt () =
   let ( let* ) = Result.bind in
-  let open Subprocess in
   let* branch_proc =
-    run ~stdout:`Pipe ~stderr:`Devnull [|"git"; "branch"|] in
+    Subprocess.run ~stdout:`Pipe ~stderr:`Devnull [|"git"; "branch"|] in
   let* branch = get_active_branch branch_proc.stdout
-                |> Option.to_result ~none:(Unix.WEXITED 0, branch_proc) in
-  let* color_proc =
-    run ~stdout:`Pipe ~stderr:`Devnull [|"git"; "status"; "-s"|] in
-  let color = match color_proc.stdout with
+                |> Option.to_result ~none:(branch_proc) in
+  let* status_proc =
+    Subprocess.run ~stdout:`Pipe ~stderr:`Devnull [|"git"; "status"; "-s"|] in
+  let color = match status_proc.stdout with
       [] -> "green"
     | _ -> "red" in
   Ok (color, branch)
+
+let get_git_prompt_later () =
+  let branch_proc =
+    Subprocess.create ~stdout:`Pipe ~stderr:`Devnull [|"git"; "branch"|]
+  and status_proc =
+    Subprocess.create ~stdout:`Pipe ~stderr:`Devnull [|"git"; "status"; "-s"|] in
+  let close () =
+    Subprocess.close branch_proc |> ignore;
+    Subprocess.close status_proc |> ignore in
+  fun () ->
+    match get_active_branch (Subprocess.lines branch_proc |> List.of_seq) with
+      None -> close (); None
+    | Some branch ->
+      let color = match Subprocess.line status_proc with
+          None -> "green"
+        | Some _ -> "red" in
+      close ();
+      Some (color, branch)
 
 let get_updates () =
   let fh = (Sys.getenv "HOME") ^ "/.updates" |> open_in in
@@ -61,7 +78,7 @@ let () =
   if Sys.getenv "USER" = "root" then
     (print_endline "%F{yellow}%m%f:%F{red}%~%f# ";
      exit 0);
-
+  let get_git_prompt = get_git_prompt_later () in
   let dir_prompt =
     let short_dir = get_short_dir (Sys.getcwd ()) in
     Some (String.concat ~sep:"" ["%F{blue}"; short_dir; "%f> "])
@@ -69,10 +86,9 @@ let () =
     Sys.getenv_opt "SSH_TTY"
     |> Option.map (fun _ -> "%F{green}%m%f:")
   and git_prompt =
-    get_git_prompt () |> Result.map
+    get_git_prompt () |> Option.map
       (fun (color, branch) ->
          String.concat ~sep:"" ["%F{"; color; "}"; branch; "%f|"])
-    |> Result.to_option  
   and venv = Sys.getenv_opt "VIRTUAL_ENV"
            |> Option.map (fun venv -> Filename.basename venv ^ "|")
   and update_prompt = get_update_prompt ()
