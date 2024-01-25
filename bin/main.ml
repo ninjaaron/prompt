@@ -7,6 +7,7 @@ let get_short_dir cwd =
   let rec loop = function
       [] -> failwith "cwd should not be empty"
     | [_] as tail -> tail
+    | "" :: tail -> "" :: loop tail
     | head :: tail ->
       let len = if head.[0] = '.' then 2 else 1 in
       String.sub head ~pos:0 ~len :: loop tail in
@@ -55,13 +56,10 @@ let get_git_prompt_later () =
 
 let get_updates () =
   let fh = (Sys.getenv "HOME") ^ "/.updates" |> open_in in
-  let buf = Bytes.create 1024 in
-  let len = input fh buf 0 1024 in
-  let rec loop len mul total =
-    if len = 0 then total else
-      let last = len - 1 in
-      loop last (mul * 256) (total + Bytes.get_uint8 buf last * mul)
-  in loop len 1 0
+  let rec loop total =
+    try loop ((total * 256) + input_byte fh)
+    with End_of_file -> total
+  in loop 0
 
 let get_update_prompt () =
   try
@@ -79,22 +77,27 @@ let () =
     (print_endline "%F{yellow}%m%f:%F{red}%~%f# ";
      exit 0);
   let get_git_prompt = get_git_prompt_later () in
+
   let dir_prompt =
     let short_dir = get_short_dir (Sys.getcwd ()) in
     Some (String.concat ~sep:"" ["%F{blue}"; short_dir; "%f> "])
+
   and host_prompt =
     Sys.getenv_opt "SSH_TTY"
     |> Option.map (fun _ -> "%F{green}%m%f:")
+
   and git_prompt =
     get_git_prompt () |> Option.map
       (fun (color, branch) ->
          String.concat ~sep:"" ["%F{"; color; "}"; branch; "%f|"])
+
   and venv = Sys.getenv_opt "VIRTUAL_ENV"
            |> Option.map (fun venv -> Filename.basename venv ^ "|")
+
   and update_prompt = get_update_prompt ()
   in
   let prompt =
     List.filter_map
       ~f:Fun.id [venv; update_prompt; git_prompt; host_prompt; dir_prompt]
     |> String.concat ~sep:"" in
-  print_endline prompt
+  print_endline prompt;
