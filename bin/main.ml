@@ -17,42 +17,20 @@ let get_short_dir cwd =
 let active_pat = Re.Perl.compile_pat {|\* (.*)|}
 
 let rec get_active_branch = function
-    [] -> None
+    [] -> Error "output was empty"
   | hd :: tl ->
     match Re.exec_opt active_pat hd with
-      Some group -> Some (Re.Group.get group 1)
+      Some group -> Ok (Re.Group.get group 1)
     | None -> get_active_branch tl
 
 let get_git_prompt () =
-  let ( let* ) = Result.bind in
-  let* branch_proc =
-    Subprocess.run ~stdout:`Pipe ~stderr:`Devnull [|"git"; "branch"|] in
-  let* branch = get_active_branch branch_proc.stdout
-                |> Option.to_result ~none:(branch_proc) in
-  let* status_proc =
-    Subprocess.run ~stdout:`Pipe ~stderr:`Devnull [|"git"; "status"; "-s"|] in
-  let color = match status_proc.stdout with
-      [] -> "green"
-    | _ -> "red" in
+  let open Subprocess.Results in
+  let lines args = cmd args |> devnull_err |> lines |> string_error in
+  let* branch_out = lines ["git"; "branch"] in
+  let* branch = get_active_branch branch_out in
+  let* status_out = lines ["git"; "status"; "-s"] in
+  let color = if status_out = [] then "green" else "red" in
   Ok (color, branch)
-
-let get_git_prompt_later () =
-  let branch_proc =
-    Subprocess.create ~stdout:`Pipe ~stderr:`Devnull [|"git"; "branch"|]
-  and status_proc =
-    Subprocess.create ~stdout:`Pipe ~stderr:`Devnull [|"git"; "status"; "-s"|] in
-  let close () =
-    Subprocess.close branch_proc |> ignore;
-    Subprocess.close status_proc |> ignore in
-  fun () ->
-    match get_active_branch (Subprocess.lines branch_proc |> List.of_seq) with
-      None -> close (); None
-    | Some branch ->
-      let color = match Subprocess.line status_proc with
-          None -> "green"
-        | Some _ -> "red" in
-      close ();
-      Some (color, branch)
 
 let get_updates () =
   let fh = (Sys.getenv "HOME") ^ "/.updates" |> open_in in
@@ -76,7 +54,6 @@ let () =
   if Sys.getenv "USER" = "root" then
     (print_endline "%F{yellow}%m%f:%F{red}%~%f# ";
      exit 0);
-  let get_git_prompt = get_git_prompt_later () in
 
   let dir_prompt =
     let short_dir = get_short_dir (Sys.getcwd ()) in
@@ -87,7 +64,7 @@ let () =
     |> Option.map (fun _ -> "%F{green}%m%f:")
 
   and git_prompt =
-    get_git_prompt () |> Option.map
+    get_git_prompt () |> Result.to_option |> Option.map
       (fun (color, branch) ->
          String.concat ~sep:"" ["%F{"; color; "}"; branch; "%f|"])
 
