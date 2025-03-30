@@ -3,7 +3,7 @@ module Unix = UnixLabels
 
 let home_pat = Re.Perl.compile_pat ("^" ^ (Sys.getenv "HOME"))
 let path_part = Re.Perl.compile_pat "(.).*?/"
-let active_branch = Re.Perl.compile_pat {|\* (.*?)\n|}
+let active_branch = Re.Perl.compile_pat {|\* (.*)|}
 
 let get_short_dir cwd =
   Re.replace_string home_pat ~by:"~" cwd |>
@@ -13,7 +13,8 @@ let rec get_active_branch = function
     [] -> None
   | hd :: tl ->
     match Re.exec_opt active_branch hd with
-      Some group -> Some (Re.Group.get group 1)
+    | Some group ->
+      Some (Re.Group.get group 1)
     | None -> get_active_branch tl
 
 let proc_lines args =
