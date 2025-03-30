@@ -3,34 +3,27 @@ module Unix = UnixLabels
 
 let home_pat = Re.Perl.compile_pat ("^" ^ (Sys.getenv "HOME"))
 let path_part = Re.Perl.compile_pat "(.).*?/"
-let active_branch = Re.Perl.compile_pat {|\* (.*)|}
+let active_branch = Re.Perl.compile_pat {|\* (.*?)\n|}
 
 let get_short_dir cwd =
   Re.replace_string home_pat ~by:"~" cwd |>
   Re.replace path_part ~f:(fun g -> Re.Group.get g 1 ^ "/")
 
-let rec get_active_branch = function
-    [] -> None
-  | hd :: tl ->
-    match Re.exec_opt active_branch hd with
-    | Some group ->
-      Some (Re.Group.get group 1)
-    | None -> get_active_branch tl
-
-let proc_lines args =
+let proc_out args =
   let stdout, stdin, stderr =
     Unix.open_process_args_full args.(0) args [||] in
-  let lines = In_channel.input_lines stdout in
+  let lines = In_channel.input_all stdout in
   match Unix.close_process_full (stdout, stdin, stderr) with
   | Unix.WEXITED 0 -> Some lines
   | _ -> None
 
 let get_git_prompt () =
   let (let*) = Option.bind in
-  let* branch_out = proc_lines [|"git"; "branch"|] in
-  let* branch = get_active_branch branch_out in
-  let* status_out = proc_lines [|"git"; "status"; "-s"|] in
-  let color = if status_out = [] then "green" else "red" in
+  let* branch_out = proc_out [|"git"; "branch"|] in
+  let* branch_g = Re.exec_opt active_branch branch_out in
+  let branch = Re.Group.get branch_g 1 in
+  let* status_out = proc_out [|"git"; "status"; "-s"|] in
+  let color = if status_out = "" then "green" else "red" in
   Some (color, branch)
 
 let get_updates () =
