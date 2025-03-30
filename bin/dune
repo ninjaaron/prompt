@@ -1,4 +1,4 @@
 (executable
  (public_name prompt)
  (name main)
- (libraries prompt unix re))
+ (libraries prompt subprocess re))
