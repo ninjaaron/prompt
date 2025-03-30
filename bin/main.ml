@@ -1,4 +1,5 @@
 open StdLabels
+module Unix = UnixLabels
 
 let home = Re.Perl.compile_pat (Sys.getenv "HOME")
 
@@ -17,20 +18,27 @@ let get_short_dir cwd =
 let active_pat = Re.Perl.compile_pat {|\* (.*)|}
 
 let rec get_active_branch = function
-    [] -> Error "output was empty"
+    [] -> None
   | hd :: tl ->
     match Re.exec_opt active_pat hd with
-      Some group -> Ok (Re.Group.get group 1)
+      Some group -> Some (Re.Group.get group 1)
     | None -> get_active_branch tl
 
+let proc_lines args =
+  let stdout, stdin, stderr =
+    Unix.open_process_args_full args.(0) args [||] in
+  let lines = In_channel.input_lines stdout in
+  match Unix.close_process_full (stdout, stdin, stderr) with
+  | Unix.WEXITED 0 -> Some lines
+  | _ -> None
+
 let get_git_prompt () =
-  let open Subprocess.Results in
-  let lines args = cmd args |> devnull_err |> lines |> string_error in
-  let* branch_out = lines ["git"; "branch"] in
+  let (let*) = Option.bind in
+  let* branch_out = proc_lines [|"git"; "branch"|] in
   let* branch = get_active_branch branch_out in
-  let* status_out = lines ["git"; "status"; "-s"] in
+  let* status_out = proc_lines [|"git"; "status"; "-s"|] in
   let color = if status_out = [] then "green" else "red" in
-  Ok (color, branch)
+  Some (color, branch)
 
 let get_updates () =
   let fh = (Sys.getenv "HOME") ^ "/.updates" |> open_in in
@@ -64,7 +72,7 @@ let () =
     |> Option.map (fun _ -> "%F{green}%m%f:")
 
   and git_prompt =
-    get_git_prompt () |> Result.to_option |> Option.map
+    get_git_prompt () |> Option.map
       (fun (color, branch) ->
          String.concat ~sep:"" ["%F{"; color; "}"; branch; "%f|"])
 
