@@ -10,21 +10,20 @@ let get_short_dir cwd =
   Re.replace_string home_pat ~by:"~" cwd |>
   Re.replace path_part ~f:(fun g -> Re.Group.get g 1 ^ "/")
 
-let get_git_prompt branch_ic status_ic =
-  let open Subprocess.Results in
-  match managed_read branch_ic, managed_read status_ic with
-  | Error _, _ | _, Error _ -> None
-  | Ok branch_out, Ok status_out ->
-    let branch = Re.(Group.get (exec active_branch branch_out) 1) in
-    let color = if status_out = "" then "green" else "red" in
-    Some (color, branch)
+let proc_out args =
+  let sout, sin, serr = Unix.open_process_args_full args.(0) args [||] in
+  let out = In_channel.input_all sout in
+  match Unix.close_process_full (sout, sin, serr) with
+  | Unix.WEXITED 0 -> Some out
+  | _ -> None
 
-let get_git_prompt_later () =
-  let open Subprocess in
-  let open' c = open_out @@ devnull_err @@ cmd c in
-  let branch_ic = open' ["git"; "branch"] in
-  let status_ic = open' ["git"; "status"; "-s"] in
-  fun () -> get_git_prompt branch_ic status_ic
+let get_git_prompt () =
+  let (let*) = Option.bind in
+  let* branch_out = proc_out [|"git"; "branch"|] in
+  let branch = Re.(Group.get (exec active_branch branch_out)) in
+  let* status_out = proc_out [|"git"; "status"; "-s"|] in
+  let color = if status_out = "" then "green" else "red" in
+  Some (branch, color)
 
 let get_updates () =
   let fn = home ^ "/.updates" in
