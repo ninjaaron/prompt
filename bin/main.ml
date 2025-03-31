@@ -20,10 +20,10 @@ let proc_out args =
 let get_git_prompt () =
   let (let*) = Option.bind in
   let* branch_out = proc_out [|"git"; "branch"|] in
-  let branch = Re.(Group.get (exec active_branch branch_out)) in
+  let branch = Re.(Group.get (exec active_branch branch_out)) 1 in
   let* status_out = proc_out [|"git"; "status"; "-s"|] in
   let color = if status_out = "" then "green" else "red" in
-  Some (branch, color)
+  Some (color, branch)
 
 let get_updates () =
   let fn = home ^ "/.updates" in
@@ -38,7 +38,6 @@ let () =
   | _ ->
     let time = let tm = Unix.(localtime (time ())) in
       Some (Printf.sprintf "%02d:%02d:%02d|" tm.tm_hour tm.tm_min tm.tm_sec) in
-    let get_git_prompt = get_git_prompt_later () in
     let (let+) opt f = Option.map f opt in
     let dir = let short_dir = get_short_dir @@ getcwd () in
       Some (String.concat ~sep:"" ["%F{blue}"; short_dir; "%f> "])
