@@ -31,7 +31,9 @@ let get_updates () =
   if not (file_exists fn) then None else
     let fh = open_in fn in
     let f total c = int_of_char c + (256 * total) in
-    Some (String.fold_left ~init:0 ~f (In_channel.input_all fh))
+    match String.fold_left ~init:0 ~f (In_channel.input_all fh) with
+    | 0 -> None
+    | n -> Some n
 
 let () =
   match getenv "USER" with
