@@ -33,14 +33,13 @@ let get_updates () =
     Some (String.fold_left ~init:0 ~f (In_channel.input_all fh))
 
 let () =
-  if Array.length Sys.argv > 1 && Sys.argv.(1) = "-t" then
-    exit 0;
-
   if Sys.getenv "USER" = "root" then
     (print_endline "%F{yellow}%m%f:%F{red}%~%f# ";
      exit 0);
-
   let (let+) opt f = Option.map f opt in
+  let time = let tm = Unix.(localtime (time ())) in
+    Some (Printf.sprintf "%02d:%02d:%02d|" tm.tm_hour tm.tm_min tm.tm_sec) in
+
   let dir =
     let short_dir = get_short_dir (Sys.getcwd ()) in
     Some (String.concat ~sep:"" ["%F{blue}"; short_dir; "%f> "])
@@ -52,4 +51,4 @@ let () =
   and update = let+ n = get_updates () in
     "%F{yellow}" ^ Printf.sprintf "%x" n ^ "%f|" in
   print_endline @@ String.concat ~sep:""
-  @@ List.filter_map ~f:Fun.id [venv; update; git; host; dir]
+  @@ List.filter_map ~f:Fun.id [time; venv; update; git; host; dir]
