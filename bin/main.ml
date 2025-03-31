@@ -37,6 +37,8 @@ let () =
   match getenv "USER" with
   | "root" -> print_endline "%F{yellow}%m%f:%F{red}%~%f# "
   | _ ->
+    let time = let tm = Unix.(localtime (time ())) in
+      Some (Printf.sprintf "%02d:%02d:%02d|" tm.tm_hour tm.tm_min tm.tm_sec) in
     let get_git_prompt = get_git_prompt_later () in
     let (let+) opt f = Option.map f opt in
     let dir = let short_dir = get_short_dir @@ getcwd () in
@@ -49,4 +51,4 @@ let () =
     and update = let+ n = get_updates () in
       "%F{yellow}" ^ Printf.sprintf "%x" n ^ "%f|" in
     print_endline @@ String.concat ~sep:""
-    @@ List.filter_map ~f:Fun.id [venv; update; git; host; dir]
+    @@ List.filter_map ~f:Fun.id [time; venv; update; git; host; dir]
