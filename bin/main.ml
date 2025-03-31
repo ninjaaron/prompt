@@ -44,11 +44,11 @@ let () =
     let dir = let short_dir = get_short_dir @@ getcwd () in
       Some (String.concat ~sep:"" ["%F{blue}"; short_dir; "%f> "])
     and host = let+ _ = getenv_opt "SSH_TTY" in "%F{green}%m%f:"
-    and git = let+ color, branch = get_git_prompt () in
-      String.concat ~sep:"" ["%F{"; color; "}"; branch; "%f|"]
     and venv = let+ venv = Sys.getenv_opt "VIRTUAL_ENV" in
       Filename.basename venv ^ "|"
     and update = let+ n = get_updates () in
-      "%F{yellow}" ^ Printf.sprintf "%x" n ^ "%f|" in
+      "%F{yellow}" ^ Printf.sprintf "%x" n ^ "%f|"
+    and git = let+ color, branch = get_git_prompt () in
+      String.concat ~sep:"" ["%F{"; color; "}"; branch; "%f|"] in
     print_endline @@ String.concat ~sep:""
     @@ List.filter_map ~f:Fun.id [time; venv; update; git; host; dir]
