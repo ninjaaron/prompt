@@ -6,7 +6,7 @@ let home_pat = Re.Perl.compile_pat ("^" ^ home)
 let path_part = Re.Perl.compile_pat "(.).*?/"
 let active_branch = Re.Perl.compile_pat {|\* (.*?)\n|}
 
-let get_short_dir cwd =
+let _get_short_dir cwd =
   Re.replace_string home_pat ~by:"~" cwd |>
   Re.replace path_part ~f:(fun g -> Re.Group.get g 1 ^ "/")
 
@@ -35,16 +35,17 @@ let () =
   | "root" -> print_endline "%F{yellow}%m%f:%F{red}%~%f# "
   | _ ->
     let time = let tm = Unix.(localtime (time ())) in
-      Some (Printf.sprintf "%02d:%02d:%02d|" tm.tm_hour tm.tm_min tm.tm_sec) in
+      Some (Printf.sprintf "%02d:%02d:%02d | " tm.tm_hour tm.tm_min tm.tm_sec) in
     let (let+) opt f = Option.map f opt in
-    let dir = let short_dir = get_short_dir @@ getcwd () in
-      Some (String.concat ~sep:"" ["%F{blue}"; short_dir; "%f> "])
+    let dir =
+      let dir' =Re.replace_string ~by:"~" home_pat @@ getcwd () in
+      Some (String.concat ~sep:"" ["%F{blue}"; dir'; "%f\n> "])
     and host = let+ _ = getenv_opt "SSH_TTY" in "%F{green}%m%f:"
-    and venv = let+ venv = Sys.getenv_opt "VIRTUAL_ENV" in
-      Filename.basename venv ^ "|"
-    and update = let+ n = get_updates () in
-      "%F{yellow}" ^ Printf.sprintf "%x" n ^ "%f|"
     and git = let+ color, branch = get_git_prompt () in
-      String.concat ~sep:"" ["%F{"; color; "}"; branch; "%f|"] in
+      String.concat ~sep:"" ["%F{"; color; "}"; branch; "%f | "]
+    and venv = let+ venv = Sys.getenv_opt "VIRTUAL_ENV" in
+      Filename.basename venv ^ " | "
+    and update = let+ n = get_updates () in
+      "%F{yellow}" ^ Printf.sprintf "%x" n ^ "%f | " in
     print_endline @@ String.concat ~sep:""
     @@ List.filter_map ~f:Fun.id [time; venv; update; git; host; dir]
