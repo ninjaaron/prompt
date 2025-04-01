@@ -35,6 +35,7 @@ let get_updates () =
     | n -> Some n
 
 let () =
+  if Array.length Sys.argv > 1 && Sys.argv.(1) = "-t" then exit 0;
   match getenv "USER" with
   | "root" -> print_endline "%F{yellow}%m%f:%F{red}%~%f# "
   | _ ->
