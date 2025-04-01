@@ -10,21 +10,15 @@ let get_short_dir cwd =
   Re.replace_string home_pat ~by:"~" cwd |>
   Re.replace path_part ~f:(fun g -> Re.Group.get g 1 ^ "/")
 
-let get_git_prompt branch_ic status_ic =
+let get_git_prompt () =
+  Result.to_option @@
   let open Subprocess.Results in
-  match managed_read branch_ic, managed_read status_ic with
-  | Error _, _ | _, Error _ -> None
-  | Ok branch_out, Ok status_out ->
-    let branch = Re.(Group.get (exec active_branch branch_out) 1) in
-    let color = if status_out = "" then "green" else "red" in
-    Some (color, branch)
-
-let get_git_prompt_later () =
-  let open Subprocess in
-  let open' c = open_out @@ devnull_err @@ cmd c in
-  let branch_ic = open' ["git"; "branch"] in
-  let status_ic = open' ["git"; "status"; "-s"] in
-  fun () -> get_git_prompt branch_ic status_ic
+  let get_out args = cmd args |> devnull_err |> read in
+  let* branch_out = get_out ["git"; "branch"] in
+  let* status_out = get_out ["git"; "status"; "-s"] in
+  let branch = Re.(Group.get (exec active_branch branch_out) 1) in
+  let color = if status_out = "" then "green" else "red" in
+  Ok (color, branch)
 
 let get_updates () =
   let fn = home ^ "/.updates" in
@@ -42,7 +36,6 @@ let () =
   | _ ->
     let time = let tm = Unix.(localtime (time ())) in
       Some (Printf.sprintf "%02d:%02d:%02d|" tm.tm_hour tm.tm_min tm.tm_sec) in
-    let get_git_prompt = get_git_prompt_later () in
     let (let+) opt f = Option.map f opt in
     let dir = let short_dir = get_short_dir @@ getcwd () in
       Some (String.concat ~sep:"" ["%F{blue}"; short_dir; "%f> "])
